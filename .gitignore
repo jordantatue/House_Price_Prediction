@@ -1,0 +1,80 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.code-workspace
+*.swp
+*.swo
+*.bak
+
+# Python cache/bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.env.*
+.venv
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# Packaging / build artifacts
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+wheels/
+share/python-wheels/
+pip-wheel-metadata/
+.installed.cfg
+MANIFEST
+
+# Logs
+*.log
+logs/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+coverage.xml
+nosetests.xml
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ML artifacts (not tracked)
+data/
+models/
+artifacts/
+checkpoints/
+runs/
+wandb/
+mlruns/
+
+# Allow placeholders in tracked folders
+!data/.gitkeep
+!data/README.md
+!models/.gitkeep
+!models/README.md
+
+# Binary artifacts
+*.pkl
+*.joblib
+*.bin
+
+# Docker local override (optional)
+docker-compose.override.yml
