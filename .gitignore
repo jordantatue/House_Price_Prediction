@@ -1,8 +1,15 @@
-# OS files
+############################################
+# SYSTÈME
+############################################
+
+# Fichiers systèmes
 .DS_Store
 Thumbs.db
 
-# Editor/IDE
+############################################
+# EDITEURS / IDE
+############################################
+
 .vscode/
 .idea/
 *.code-workspace
@@ -10,23 +17,29 @@ Thumbs.db
 *.swo
 *.bak
 
-# Python cache/bytecode
+############################################
+# PYTHON
+############################################
+
+# Bytecode et cache
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
+# Environnements virtuels
 .env
-.env.*
 .venv
-venv/
 env/
+venv/
 ENV/
 env.bak/
 venv.bak/
 .python-version
 
-# Packaging / build artifacts
+############################################
+# BUILD / PACKAGING
+############################################
+
 build/
 dist/
 .eggs/
@@ -38,11 +51,17 @@ pip-wheel-metadata/
 .installed.cfg
 MANIFEST
 
-# Logs
+############################################
+# LOGS
+############################################
+
 *.log
 logs/
 
-# Tests / coverage
+############################################
+# TESTS / COVERAGE
+############################################
+
 .pytest_cache/
 .coverage
 .coverage.*
@@ -53,28 +72,5 @@ htmlcov/
 coverage.xml
 nosetests.xml
 
-# Jupyter
-.ipynb_checkpoints/
-
-# ML artifacts (not tracked)
-data/
-models/
-artifacts/
-checkpoints/
-runs/
-wandb/
-mlruns/
-
-# Allow placeholders in tracked folders
-!data/.gitkeep
-!data/README.md
-!models/.gitkeep
-!models/README.md
-
-# Binary artifacts
-*.pkl
-*.joblib
-*.bin
-
-# Docker local override (optional)
-docker-compose.override.yml
+#
+random_forest.pkl
