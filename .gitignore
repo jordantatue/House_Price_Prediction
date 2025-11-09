@@ -73,4 +73,3 @@ coverage.xml
 nosetests.xml
 
 #
-random_forest.pkl
