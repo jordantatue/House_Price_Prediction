@@ -2,31 +2,56 @@ name: CI/CD - ML Housing API
 
 on:
   push:
-    branches: [ master ]
+    branches: [ "master" ]
   pull_request:
-    branches: [ master ]
+    branches: [ "master" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout (with Git LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true            # <— récupère les fichiers LFS (modèles .pkl) au lieu des pointeurs
+          fetch-depth: 0
+
+      - name: Ensure Git LFS
+        run: |
+          git lfs version || sudo apt-get update && sudo apt-get install -y git-lfs
+          git lfs install
+          git lfs pull         # <— ceinture et bretelles : force la récupération LFS
+
+      - name: Show repo content (debug)
+        run: |
+          ls -la
+          ls -la models || true
+          file models/* || true
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install dependencies (for tests)
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # installe pytest si tu as des tests
+          pip install pytest || true
 
       - name: Run tests
         run: |
-          pytest || echo "Pas encore de tests automatisés"
+          pytest || echo "Aucun test formel pour l’instant"
+
+      # Optionnel : cache buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
         run: |
-          docker build -t ml-housing-api .
+          docker build -t ml-housing-api:ci .
