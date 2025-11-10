@@ -10,6 +10,7 @@ import hashlib
 import logging
 from datetime import datetime
 from src.settings import settings
+from typing import Optional
 
 
 logger = logging.getLogger("uvicorn")
@@ -40,14 +41,28 @@ async def limit_body_size(request: Request, call_next):
     return await call_next(request)
 
 
-# Chargement du modèle/scaler
+# Chemins modèle/scaler
 MODEL_PATH = settings.model_path
 SCALER_PATH = settings.scaler_path
-if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-    raise RuntimeError("Modèle ou scaler manquant. Entraînez d'abord le modèle.")
 
-model = joblib.load(MODEL_PATH)
-scaler = joblib.load(SCALER_PATH)
+# Modèle/scaler chargés paresseusement pour éviter de crasher au démarrage
+model: Optional[object] = None
+scaler: Optional[object] = None
+
+
+def try_load_artifacts() -> bool:
+    """Charge le modèle et le scaler si présents. Retourne True si OK."""
+    global model, scaler
+    if os.path.exists(MODEL_PATH) and os.path.exists(SCALER_PATH):
+        model = joblib.load(MODEL_PATH)
+        scaler = joblib.load(SCALER_PATH)
+        return True
+    return False
+
+
+@app.on_event("startup")
+def _load_on_startup():
+    try_load_artifacts()
 
 
 class HouseFeatures(BaseModel):
@@ -66,24 +81,28 @@ REQUEST_COUNT = Counter("prediction_requests_total", "Nombre total de requêtes 
 LAST_PREDICTION = Gauge("last_prediction_timestamp", "Horodatage de la dernière prédiction")
 
 
-def _file_md5(path: str) -> str:
+def _file_hash(path: str) -> str:
+    """Empreinte SHA-256 du fichier pour traçabilité (évite MD5)."""
+    h = hashlib.sha256()
     with open(path, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def _model_info():
     return {
         "model_version": settings.app_version,
-        "model_hash": _file_md5(MODEL_PATH),
-        "scaler_hash": _file_md5(SCALER_PATH),
+        "model_hash": _file_hash(MODEL_PATH) if os.path.exists(MODEL_PATH) else None,
+        "scaler_hash": _file_hash(SCALER_PATH) if os.path.exists(SCALER_PATH) else None,
         "last_updated": datetime.utcfromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat()
-        + "Z",
+        + "Z" if os.path.exists(MODEL_PATH) else None,
     }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": True}
+    return {"status": "ok", "model_loaded": bool(model) and bool(scaler)}
 
 
 @app.get("/version")
@@ -105,6 +124,8 @@ def metrics():
 @app.post("/predict")
 def predict(features: HouseFeatures):
     try:
+        if model is None or scaler is None:
+            raise HTTPException(status_code=503, detail="Model not loaded")
         X = np.array(
             [
                 [
