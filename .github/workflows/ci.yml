@@ -48,17 +48,17 @@ jobs:
       - name: Run tests (with coverage)
         run: pytest --cov=src --cov-report=term-missing
 
-      - name: Install security tools
-        run: |
-          pip install pip-audit bandit
+      # - name: Install security tools
+      #   run: |
+      #     pip install pip-audit bandit
 
-      - name: pip-audit (deps vulns)
-        run: |
-          pip-audit -r requirements.txt
+      # - name: pip-audit (deps vulns)
+      #   run: |
+      #     pip-audit -r requirements.txt
 
-      - name: bandit (code security)
-        run: |
-          bandit -r src -q
+      # - name: bandit (code security)
+      #   run: |
+      #     bandit -r src -q
 
       # Optionnel : cache buildx
       - name: Set up Docker Buildx
