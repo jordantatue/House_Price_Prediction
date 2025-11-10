@@ -1,0 +1,18 @@
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+>>     -Method POST `                  
+>>     -Headers @{ "Content-Type" = "application/json" } `
+>>     -Body '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
+
+docker run -p 8000:8000 ml-housing-api    
+docker compose up --build      
+docker build -t ml-housing-api .   
+$env:Path += ";C:\Users\tatue\AppData\Roaming\Python\Python314\Scripts"   
+conda activate ml_env  
+git lfs install   
+git lfs track "*.pkl"                                               
+
+pip freeze > requirements.txt                                       
+pip show uvicorn            
+uvicorn src.api:app --reload
+jupyter notebook  
+jupyter lab   

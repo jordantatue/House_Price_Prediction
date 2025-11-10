@@ -44,9 +44,20 @@ jobs:
           # installe pytest si tu as des tests
           pip install pytest || true
 
-      - name: Run tests
-        run: |
-          pytest || echo "Aucun test formel pour l’instant"
+      - name: Run tests (with coverage)
+        run: pytest --cov=src --cov-report=term-missing
+      
+      # Optionnel : échouer si la couverture < 70%
+      # - name: Enforce coverage threshold
+      #   run: |
+      #     coverage=$(pytest --cov=src --cov-report=term | awk '/TOTAL/ {print $4}' | sed 's/%//')
+      #     python - <<'PY'
+      #     import sys, os
+      #     cov = float(os.environ.get("coverage", "0"))
+      #     sys.exit(0 if cov >= 70 else 1)
+      #     PY
+      #   env:
+      #     coverage: ${{ steps.tests.outputs.coverage || '0' }}
 
       # Optionnel : cache buildx
       - name: Set up Docker Buildx

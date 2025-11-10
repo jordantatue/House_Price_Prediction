@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-fastapi
 uvicorn[standard]
 joblib
 scikit-learn
@@ -9,3 +8,7 @@ pandas
 scipy
 requests
 prometheus-client
+pydantic>=2
+httpx
+pytest
+pytest-cov

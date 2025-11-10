@@ -1,65 +1,120 @@
-import logging, logging.config, yaml, time
-from fastapi import FastAPI, Request
-import joblib, numpy as np
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-from fastapi import Response
+"""
+API FastAPI simple pour la prédiction du prix des maisons
+Inclut :
+- Endpoint /predict : prédictions
+- Endpoint /health : état de santé de l'API
+- Endpoint /version : infos sur le modèle
+- Endpoint /metrics : intégration Prometheus
+"""
 
-PREDICTIONS = Counter("predictions_total", "Total de prédictions retournées")
-PREDICTION_ERRORS = Counter("prediction_errors_total", "Total d'erreurs de prédiction")
-LATENCY = Histogram("prediction_latency_seconds", "Latence des prédictions en secondes")
-IN_PROGRESS = Gauge("prediction_in_progress", "Prédictions en cours")
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from fastapi.responses import Response
+import joblib
+import numpy as np
+import os
+import hashlib
+from datetime import datetime
 
-# --- Logging config ---
-with open("configs/logging.yaml", "r") as f:
-    logging.config.dictConfig(yaml.safe_load(f))
-logger = logging.getLogger("app")
+# =====================================================
+# 1️⃣ Initialisation de l'app FastAPI
+# =====================================================
+app = FastAPI(title="Housing Price Prediction API", version="1.0.0")
 
-app = FastAPI(title="Housing Price Predictor")
+# =====================================================
+# 2️⃣ Chargement du modèle et du scaler
+# =====================================================
+MODEL_PATH = "models/random_forest.pkl"
+SCALER_PATH = "models/scaler.pkl"
 
-# --- Versioning simple (affiché dans les logs et /health) ---
-MODEL_VERSION = "rf-1.0.0"
-DATA_VERSION = "california-housing-2025.11"
-model = joblib.load("models/random_forest.pkl")
-scaler = joblib.load("models/scaler.pkl")
+if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
+    raise RuntimeError("Modèle ou scaler manquant. Entraîne d'abord le modèle.")
 
-# --- Middleware: mesure de latence + logs ---
-@app.middleware("http")
-async def add_timing(request: Request, call_next):
-    start = time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info(f"path={request.url.path} status={response.status_code} elapsed_ms={elapsed_ms:.2f}")
-    return response
+model = joblib.load(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
+
+# =====================================================
+# 3️⃣ Schéma de données pour les requêtes
+# =====================================================
+class HouseFeatures(BaseModel):
+    MedInc: float = Field(..., gt=0, description="Revenu médian du quartier")
+    HouseAge: float = Field(..., ge=0)
+    AveRooms: float = Field(..., ge=0)
+    AveBedrms: float = Field(..., ge=0)
+    Population: float = Field(..., ge=1)
+    AveOccup: float = Field(..., ge=0)
+    Latitude: float = Field(..., ge=32, le=42)
+    Longitude: float = Field(..., ge=-125, le=-114)
+
+# =====================================================
+# 4️⃣ Métriques Prometheus
+# =====================================================
+REQUEST_COUNT = Counter("prediction_requests_total", "Nombre total de requêtes /predict")
+LAST_PREDICTION = Gauge("last_prediction_timestamp", "Horodatage de la dernière prédiction")
+
+# =====================================================
+# 5️⃣ Fonctions utilitaires
+# =====================================================
+def compute_model_hash(file_path: str) -> str:
+    """Retourne un hash unique du modèle pour traçabilité"""
+    with open(file_path, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+def model_info():
+    """Retourne les infos sur le modèle"""
+    return {
+        "model_version": "1.0.0",
+        "model_hash": compute_model_hash(MODEL_PATH),
+        "last_updated": datetime.utcfromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat() + "Z"
+    }
+
+# =====================================================
+# 6️⃣ Endpoints de service
+# =====================================================
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_version": MODEL_VERSION, "data_version": DATA_VERSION}
+    """Vérifie que l’API et le modèle fonctionnent"""
+    return {"status": "ok", "model_loaded": os.path.exists(MODEL_PATH)}
 
-@app.get("/ready")
-def ready():
-    ok = model is not None and scaler is not None
-    return {"ready": ok}
-
+@app.get("/version")
+def version():
+    """Retourne la version et les métadonnées du modèle"""
+    return model_info()
 
 @app.get("/metrics")
 def metrics():
+    """Expose les métriques Prometheus"""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
+# =====================================================
+# 7️⃣ Endpoint principal de prédiction
+# =====================================================
 @app.post("/predict")
-@LATENCY.time()
-def predict(data: dict):
-    IN_PROGRESS.inc()
+def predict(features: HouseFeatures):
+    """
+    Prend les caractéristiques d'une maison et renvoie le prix prédit.
+    """
     try:
-        logger.info(f"predict_received keys={list(data.keys())} model={MODEL_VERSION}")
-        X = np.array([list(data.values())], dtype=float)
-        X_scaled = scaler.transform(X)
-        y = model.predict(X_scaled)
-        PREDICTIONS.inc()
-        logger.info(f"predict_done value={float(y[0])} model={MODEL_VERSION}")
-        return {"predicted_price": float(y[0]), "model_version": MODEL_VERSION}
+        data = np.array([[features.MedInc, features.HouseAge, features.AveRooms,
+                          features.AveBedrms, features.Population, features.AveOccup,
+                          features.Latitude, features.Longitude]])
+
+        X_scaled = scaler.transform(data)
+        prediction = model.predict(X_scaled)[0]
+
+        REQUEST_COUNT.inc()
+        LAST_PREDICTION.set_to_current_time()
+
+        return {"predicted_price": float(prediction)}
+
     except Exception as e:
-        PREDICTION_ERRORS.inc()
-        logger.exception("prediction_failed")
-        return {"error": str(e)}
-    finally:
-        IN_PROGRESS.dec()
+        raise HTTPException(status_code=400, detail=str(e))
+
+# =====================================================
+# 8️⃣ Lancement local
+# =====================================================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("src.api:app", host="0.0.0.0", port=8000, reload=True)
