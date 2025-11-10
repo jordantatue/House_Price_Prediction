@@ -1,32 +1,49 @@
-name: Nightly Retrain
-
+name: Retrain Model
 on:
   schedule:
-    - cron: "0 8 * * 1"  # chaque lundi 10:00 Paris (8:00 UTC)
+    - cron: '0 8 * * 1'   # tous les lundis 10:00 Paris (8:00 UTC)
   workflow_dispatch:
 
 jobs:
   retrain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
+      - name: Checkout (with LFS)
+        uses: actions/checkout@v4
+        with: { lfs: true }
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with: { python-version: '3.14' }
 
       - name: Install deps
         run: pip install -r requirements.txt
 
       - name: Train
-        run: python src/train_model.py
+        run: python src/train_model.py --save models/random_forest.pkl
 
-      - name: Commit updated artefacts (metrics and model if tracked outside LFS/DVC)
+      - name: Evaluate (fail on regression)
+        run: python src/evaluate_model.py --min-r2 0.75 |
+          echo "Evaluation du model réussie avec un R2 suffisant."
+
+      - name: Publish model with Git LFS
         run: |
           git config user.name "ci-bot"
           git config user.email "ci@example.com"
-          git add models/metrics.json
-          git commit -m "Nightly metrics update" || echo "No changes"
+          git lfs track "models/*.pkl"
+          git add models/*.pkl .gitattributes
+          git commit -m "ci: new model $(date -u +%F)" || echo "Nothing to commit"
           git push || true
+
+    #   - name: (Optional) Build & push Docker
+    #     if: success()
+    #     run: |
+    #       docker build -t ghcr.io/OWNER/ml-housing-api:${{ github.sha }} .
+    #       echo "$CR_PAT" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+    #       docker push ghcr.io/OWNER/ml-housing-api:${{ github.sha }}
+
+    #   - name: (Optional) Deploy (Render)
+    #     if: success() && env.RENDER_DEPLOY_HOOK != ''
+    #     run: curl -X POST "$RENDER_DEPLOY_HOOK"
+    #     env:
+    #       RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
