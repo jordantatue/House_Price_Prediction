@@ -45,7 +45,8 @@ jobs:
           pip install pytest || true
 
       - name: Run tests (with coverage)
-        run: pytest --cov=src --cov-report=term-missing
+        run: PYTHONPATH=src pytest --cov=src --cov-report=term-missing
+
       
       # Optionnel : échouer si la couverture < 70%
       # - name: Enforce coverage threshold
