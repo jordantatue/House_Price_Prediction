@@ -1,20 +1,30 @@
 name: Retrain Model
+
 on:
   schedule:
-    - cron: '0 8 * * 1'   # tous les lundis 10:00 Paris (8:00 UTC)
+    # Lundi 09:00 UTC ≈ 10:00 Paris en heure d'hiver (attention: UTC ne suit pas l'heure d'été)
+    - cron: '0 9 * * 1'
   workflow_dispatch:
+
+permissions:
+  contents: write   # autorise le push via GITHUB_TOKEN
 
 jobs:
   retrain:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout (with LFS)
         uses: actions/checkout@v4
-        with: { lfs: true }
+        with:
+          lfs: true
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        with: { python-version: '3.14' }
+        with:
+          python-version: '3.11'
+          cache: 'pip'
 
       - name: Install deps
         run: pip install -r requirements.txt
@@ -23,27 +33,44 @@ jobs:
         run: python src/train_model.py --save models/random_forest.pkl
 
       - name: Evaluate (fail on regression)
-        run: python src/evaluate_model.py --min-r2 0.75 |
-          echo "Evaluation du model réussie avec un R2 suffisant."
-
-      - name: Publish model with Git LFS
+        shell: bash
         run: |
-          git config user.name "ci-bot"
-          git config user.email "ci@example.com"
-          git lfs track "models/*.pkl"
-          git add models/*.pkl .gitattributes
+          set -euo pipefail
+          python src/evaluate_model.py --min-r2 0.75
+          echo "✅ Évaluation OK : R² ≥ 0.75"
+
+      # Git LFS: ne retrack pas à chaque run si déjà présent dans .gitattributes
+      - name: Ensure LFS tracking (idempotent)
+        shell: bash
+        run: |
+          if ! grep -q '^models/\*\.pkl filter=lfs' .gitattributes 2>/dev/null; then
+            git lfs track "models/*.pkl"
+            git add .gitattributes
+            echo "Configured LFS tracking for models/*.pkl"
+          fi
+
+      - name: Commit & push updated model
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add models/*.pkl .gitattributes || true
           git commit -m "ci: new model $(date -u +%F)" || echo "Nothing to commit"
-          git push || true
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:${{ github.ref }}
 
-    #   - name: (Optional) Build & push Docker
-    #     if: success()
-    #     run: |
-    #       docker build -t ghcr.io/OWNER/ml-housing-api:${{ github.sha }} .
-    #       echo "$CR_PAT" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
-    #       docker push ghcr.io/OWNER/ml-housing-api:${{ github.sha }}
+      # - name: (Optional) Build & push Docker
+      #   if: success()
+      #   env:
+      #     CR_PAT: ${{ secrets.GITHUB_TOKEN }}  # ou un PAT dédié si nécessaire
+      #   run: |
+      #     docker build -t ghcr.io/${{ github.repository_owner }}/ml-housing-api:${{ github.sha }} .
+      #     echo "$CR_PAT" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+      #     docker push ghcr.io/${{ github.repository_owner }}/ml-housing-api:${{ github.sha }}
 
-    #   - name: (Optional) Deploy (Render)
-    #     if: success() && env.RENDER_DEPLOY_HOOK != ''
-    #     run: curl -X POST "$RENDER_DEPLOY_HOOK"
-    #     env:
-    #       RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+      # - name: (Optional) Deploy (Render)
+      #   if: success() && env.RENDER_DEPLOY_HOOK != ''
+      #   env:
+      #     RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+      #   run: curl -X POST "$RENDER_DEPLOY_HOOK"
