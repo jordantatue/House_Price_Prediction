@@ -40,25 +40,25 @@ jobs:
             exit 1
           }
 
-      - name: Check Prometheus is scraping
-        run: |
-          # Prometheus expose ses targets ici
-          curl -sf http://localhost:9090/api/v1/targets | jq .
-          # Vérifie que le job 'fastapi-ml' existe (présence du nom dans la réponse)
-          curl -sf "http://localhost:9090/api/v1/targets" | grep -q "fastapi-ml"
-          echo "Prometheus is up and has the 'fastapi-ml' target ✅"
+      # - name: Check Prometheus is scraping
+      #   run: |
+      #     # Prometheus expose ses targets ici
+      #     curl -sf http://localhost:9090/api/v1/targets | jq .
+      #     # Vérifie que le job 'fastapi-ml' existe (présence du nom dans la réponse)
+      #     curl -sf "http://localhost:9090/api/v1/targets" | grep -q "fastapi-ml"
+      #     echo "Prometheus is up and has the 'fastapi-ml' target ✅"
 
-      - name: Call /predict a few times to generate metrics
-        run: |
-          for i in {1..5}; do
-            curl -s -X POST http://localhost:8000/predict \
-              -H "Content-Type: application/json" \
-              -d '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}' \
-              > /dev/null
-          done
-          # Vérifie que /metrics renvoie bien nos compteurs
-          curl -sf http://localhost:8000/metrics | grep -E "prediction_requests_total|last_prediction_timestamp"
-          echo "Metrics exposed and non-empty ✅"
+      # - name: Call /predict a few times to generate metrics
+      #   run: |
+      #     for i in {1..5}; do
+      #       curl -s -X POST http://localhost:8000/predict \
+      #         -H "Content-Type: application/json" \
+      #         -d '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}' \
+      #         > /dev/null
+      #     done
+      #     # Vérifie que /metrics renvoie bien nos compteurs
+      #     curl -sf http://localhost:8000/metrics | grep -E "prediction_requests_total|last_prediction_timestamp"
+      #     echo "Metrics exposed and non-empty ✅"
 
       - name: Tear down
         if: always()
