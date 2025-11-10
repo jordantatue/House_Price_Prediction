@@ -6,14 +6,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout (with Git LFS)
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Ensure Git LFS and jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs jq
+          git lfs install
+          git lfs pull || true
+          ls -la models || true
+          file models/* || true
 
       - name: Build and launch stack (api + prometheus)
         run: |
           docker compose up -d
           # Attente active: on ping /health jusqu’à ce que ça réponde
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -sf http://localhost:8000/health > /dev/null; then
               echo "API is up ✅"
               break
@@ -22,7 +33,12 @@ jobs:
             sleep 2
           done
           # Sécurité: on re-check et on fail si encore down
-          curl -sf http://localhost:8000/health
+          curl -sf http://localhost:8000/health || {
+            echo 'API failed to become healthy. Showing logs:'
+            docker compose ps
+            docker compose logs api || true
+            exit 1
+          }
 
       - name: Check Prometheus is scraping
         run: |
