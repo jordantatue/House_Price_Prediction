@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Installer curl pour le healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # 1) Créer un user non-root
 RUN useradd -m appuser
 

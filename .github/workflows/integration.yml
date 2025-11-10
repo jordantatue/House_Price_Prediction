@@ -9,16 +9,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build and launch stack
+      - name: Build and launch stack (api + prometheus)
         run: |
           docker compose up -d
-          sleep 20
+          # Attente active: on ping /health jusqu’à ce que ça réponde
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "API is up ✅"
+              break
+            fi
+            echo "Waiting for API… ($i)"
+            sleep 2
+          done
+          # Sécurité: on re-check et on fail si encore down
+          curl -sf http://localhost:8000/health
 
-      - name: Check API health
+      - name: Check Prometheus is scraping
         run: |
-          curl -f http://localhost:8000/health
-          curl -f http://localhost:8000/metrics
-          echo "✅ API et Prometheus opérationnels"
+          # Prometheus expose ses targets ici
+          curl -sf http://localhost:9090/api/v1/targets | jq .
+          # Vérifie que le job 'fastapi-ml' existe (présence du nom dans la réponse)
+          curl -sf "http://localhost:9090/api/v1/targets" | grep -q "fastapi-ml"
+          echo "Prometheus is up and has the 'fastapi-ml' target ✅"
+
+      - name: Call /predict a few times to generate metrics
+        run: |
+          for i in {1..5}; do
+            curl -s -X POST http://localhost:8000/predict \
+              -H "Content-Type: application/json" \
+              -d '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}' \
+              > /dev/null
+          done
+          # Vérifie que /metrics renvoie bien nos compteurs
+          curl -sf http://localhost:8000/metrics | grep -E "prediction_requests_total|last_prediction_timestamp"
+          echo "Metrics exposed and non-empty ✅"
 
       - name: Tear down
         if: always()

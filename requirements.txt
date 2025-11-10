@@ -12,3 +12,4 @@ pydantic>=2
 httpx
 pytest
 pytest-cov
+pydantic-settings>=2.0
