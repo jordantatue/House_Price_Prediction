@@ -41,11 +41,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # installe pytest si tu as des tests
-          pip install pytest || true
+
+      - name: Install package (editable)
+        run: pip install -e .
 
       - name: Run tests (with coverage)
-        run: PYTHONPATH=src pytest --cov=src --cov-report=term-missing
+        run: pytest --cov=src --cov-report=term-missing
 
       
       # Optionnel : échouer si la couverture < 70%
