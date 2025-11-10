@@ -1,52 +1,125 @@
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
->>     -Method POST `                  
->>     -Headers @{ "Content-Type" = "application/json" } `
->>     -Body '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
+# ============================
+# 📚 CONTEXTE & ARCHI DU PROJET
+# ============================
+# Objectif : API FastAPI qui expose un modèle ML (RandomForest scikit-learn) pour prédire le prix des maisons.
+# Relations :
+# - scikit-learn : entraîne/sérialise le modèle (.pkl) + StandardScaler (.pkl)
+# - FastAPI + Uvicorn : sert une API REST (/predict, /health, /version, /metrics)
+# - Prometheus : scrappe /metrics (compteurs et horodatages)
+# - Grafana : visualise les métriques Prometheus (dashboards)
+# - Docker : encapsule API et stack d’observabilité pour déploiement
+# - Git LFS : stocke proprement les artefacts lourds (.pkl)
+# - GitHub Actions : CI (tests) & intégration (stack up + checks)
 
-docker run -p 8000:8000 ml-housing-api    
-docker compose up --build      
-docker build -t ml-housing-api .   
-$env:Path += ";C:\Users\tatue\AppData\Roaming\Python\Python314\Scripts"   
-conda activate ml_env  
-git lfs install   
-git lfs track "*.pkl"                                               
+# ============================
+# 🔧 INSTALLATION LOCALE (Python)
+# ============================
+# Crée l’environnement Python et installe les deps
+conda create -n ml_env python=3.11 -y
+conda activate ml_env
+pip install -r requirements.txt
 
-pip freeze > requirements.txt                                       
-pip show uvicorn            
+# Active Git LFS pour suivre les modèles
+git lfs install
+git lfs track "*.pkl"
+
+# Gèle les versions (optionnel, pour reproductibilité)
+pip freeze > requirements.txt
+
+# ============================
+# 🧠 ENTRAÎNEMENT & ÉVALUATION ML
+# ============================
+# Entraîne le modèle et sauvegarde :
+python src/train_model.py
+# Évalue, peut échouer si perf < seuil (à configurer dans le script) :
+python src/evaluate_model.py
+
+# Résultat attendu : modèles dans ./models/
+#  - models/random_forest.pkl
+#  - models/scaler.pkl
+
+# ============================
+# 🚀 LANCER L’API EN LOCAL
+# ============================
+# Sert l’API (auto-reload dev)
 uvicorn src.api:app --reload
-jupyter notebook  
-jupyter lab   
 
+# Vérifications rapides :
+# - Docs Swagger :      http://127.0.0.1:8000/docs
+# - Healthcheck :       http://127.0.0.1:8000/health
+# - Version modèle :    http://127.0.0.1:8000/version
+# - Métriques Prom :    http://127.0.0.1:8000/metrics
 
+# ============================
+# 🔮 REQUÊTES DE PRÉDICTION (curl)
+# ============================
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
 
+# ============================
+# 🔮 REQUÊTES DE PRÉDICTION (PowerShell)
+# ============================
+# (utile sous Windows)
 Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
+  -Method POST `
+  -Headers @{ "Content-Type" = "application/json" } `
+  -Body '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
 
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":12.5,"HouseAge":15,"AveRooms":7,"AveBedrms":1.2,"Population":800,"AveOccup":2.5,"Latitude":37.5,"Longitude":-122.3}'
+# ============================
+# 📦 DOCKER (API SEULE)
+# ============================
+# Construit l’image API
+docker build -t ml-housing-api .
+# Lance le conteneur API (map port 8000)
+docker run -p 8000:8000 ml-housing-api
 
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":3.2,"HouseAge":45,"AveRooms":5,"AveBedrms":1.1,"Population":3500,"AveOccup":3.8,"Latitude":33.8,"Longitude":-117.9}'
+# ============================
+# 🧩 DOCKER COMPOSE (STACK COMPLETE)
+# ============================
+# docker-compose.yml minimal (API + Prometheus + Grafana + Alertmanager)
+# Place ce bloc dans ./docker-compose.yml puis lance : docker compose up --build
 
+# Lance tout le stack :
+docker compose up --build -d
 
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":4.4,"HouseAge":30,"AveRooms":4.8,"AveBedrms":1.0,"Population":300,"AveOccup":2.1,"Latitude":36.2,"Longitude":-119.1}'
+# Vérifie :
+# - API :        http://localhost:8000/health
+# - Metrics :    http://localhost:8000/metrics
+# - Prometheus : http://localhost:9090
+# - Grafana :    http://localhost:3000 (admin / admin)
 
+# ============================
+# 📈 QUERIES RAPIDES (Prometheus/Grafana)
+# ============================
+# Tape ces expressions dans Prometheus (Graph) ou un panel Grafana (source Prometheus) :
+# - Total des prédictions :
+#   prediction_requests_total
+# - Temps depuis la dernière prédiction :
+#   time() - last_prediction_timestamp
 
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":6.8,"HouseAge":25,"AveRooms":5.5,"AveBedrms":1.3,"Population":5500,"AveOccup":4.2,"Latitude":34.3,"Longitude":-118.4}'
+# ============================
+# 🧪 CI : TEST D’INTÉGRATION MINIMAL (GitHub Actions)
+# ============================
+# Fichier .github/workflows/integration.yml
+mkdir -p .github/workflows
+cat > .github/workflows/integration.yml <<'YAML'
+name: Integration Tests
+on: [push, pull_request]
 
-Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
-    -Method POST `
-    -Headers @{ "Content-Type" = "application/json" } `
-    -Body '{"MedInc":1.5,"HouseAge":60,"AveRooms":3.5,"AveBedrms":1.0,"Population":8000,"AveOccup":5.5,"Latitude":32.8,"Longitude":-117.1}'
+jobs: integration
+# Rôle :
+# - Build & démarre toute la stack dans la CI
+# - Vérifie /health et /metrics
+# - Stoppe tout (nettoyage)
+
+# ============================
+# 🧯 DÉPANNAGE RAPIDE
+# ============================
+# Si Prometheus voit “vide” : génère des prédictions pour alimenter les compteurs
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"MedInc":12.5,"HouseAge":15,"AveRooms":7,"AveBedrms":1.2,"Population":800,"AveOccup":2.5,"Latitude":37.5,"Longitude":-122.3}'
+
+# Si la CI échoue à /health : augmente le délai d’attente (services lents au boot)
+# remplace `sleep 20` par `sleep 40` dans integration.yml
