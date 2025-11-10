@@ -1,0 +1,21 @@
+version: 1
+formatters:
+  json:
+    format: '{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}'
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: json
+    level: INFO
+loggers:
+  uvicorn:
+    handlers: [console]
+    level: INFO
+    propagate: False
+  app:
+    handlers: [console]
+    level: INFO
+    propagate: False
+root:
+  level: INFO
+  handlers: [console]

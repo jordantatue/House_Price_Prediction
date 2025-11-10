@@ -1,0 +1,32 @@
+name: Nightly Retrain
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"  # chaque lundi 10:00 Paris (8:00 UTC)
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Train
+        run: python src/train_model.py
+
+      - name: Commit updated artefacts (metrics and model if tracked outside LFS/DVC)
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci@example.com"
+          git add models/metrics.json
+          git commit -m "Nightly metrics update" || echo "No changes"
+          git push || true
