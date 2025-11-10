@@ -1,0 +1,29 @@
+{
+  "title": "ML API Observability",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Total Predictions",
+      "targets": [{ "expr": "prediction_requests_total" }],
+      "id": 1,
+      "gridPos": {"x":0,"y":0,"w":8,"h":6}
+    },
+    {
+      "type": "graph",
+      "title": "Predictions Rate (1m)",
+      "targets": [{ "expr": "rate(prediction_requests_total[1m])" }],
+      "id": 2,
+      "gridPos": {"x":0,"y":6,"w":24,"h":8}
+    },
+    {
+      "type": "stat",
+      "title": "Last Prediction (unix ts)",
+      "targets": [{ "expr": "last_prediction_timestamp" }],
+      "id": 3,
+      "gridPos": {"x":8,"y":0,"w":8,"h":6}
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

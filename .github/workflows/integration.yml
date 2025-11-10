@@ -1,0 +1,25 @@
+name: Integration Tests
+on: [push, pull_request]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and launch stack
+        run: |
+          docker compose up -d
+          sleep 20
+
+      - name: Check API health
+        run: |
+          curl -f http://localhost:8000/health
+          curl -f http://localhost:8000/metrics
+          echo "✅ API et Prometheus opérationnels"
+
+      - name: Tear down
+        if: always()
+        run: docker compose down

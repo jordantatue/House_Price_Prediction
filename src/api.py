@@ -1,44 +1,66 @@
-"""
-API FastAPI simple pour la prédiction du prix des maisons
-Inclut :
-- Endpoint /predict : prédictions
-- Endpoint /health : état de santé de l'API
-- Endpoint /version : infos sur le modèle
-- Endpoint /metrics : intégration Prometheus
-"""
+# … le haut du fichier reste identique …
+from pyexpat import features
+from src.settings import settings
+app = FastAPI(title=settings.app_name, version=settings.app_version)
+
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
-from fastapi.responses import Response
-import joblib
-import numpy as np
-import os
-import hashlib
+import joblib, numpy as np, os, hashlib
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import logging
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+from fastapi.responses import JSONResponse
 
-# =====================================================
-# 1️⃣ Initialisation de l'app FastAPI
-# =====================================================
-app = FastAPI(title="Housing Price Prediction API", version="1.0.0")
+logger = logging.getLogger("uvicorn")  # réutilise logger uvicorn
 
-# =====================================================
-# 2️⃣ Chargement du modèle et du scaler
-# =====================================================
+# dans /predict après calcul :
+logger.info("predict ok | lat=%.4f lon=%.4f", features.Latitude, features.Longitude)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET","POST"],
+    allow_headers=["*"],
+)
+
+# Limiter la taille (simple middleware)
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    max_bytes = settings.request_body_max_mb * 1024 * 1024
+    body = await request.body()
+    if len(body) > max_bytes:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"Payload too large (> {settings.request_body_max_mb} MB)"}
+        )
+    return await call_next(request)
+
+# Erreurs contrôlées (fallback)
+@app.exception_handler(Exception)
+async def generic_error_handler(_, exc: Exception):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+
 MODEL_PATH = "models/random_forest.pkl"
 SCALER_PATH = "models/scaler.pkl"
-
 if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-    raise RuntimeError("Modèle ou scaler manquant. Entraîne d'abord le modèle.")
+    raise RuntimeError("Modèle/scaler manquant. Entraîne d'abord le modèle.")
 
 model = joblib.load(MODEL_PATH)
 scaler = joblib.load(SCALER_PATH)
 
-# =====================================================
-# 3️⃣ Schéma de données pour les requêtes
-# =====================================================
 class HouseFeatures(BaseModel):
-    MedInc: float = Field(..., gt=0, description="Revenu médian du quartier")
+    MedInc: float = Field(..., gt=0)
     HouseAge: float = Field(..., ge=0)
     AveRooms: float = Field(..., ge=0)
     AveBedrms: float = Field(..., ge=0)
@@ -47,74 +69,43 @@ class HouseFeatures(BaseModel):
     Latitude: float = Field(..., ge=32, le=42)
     Longitude: float = Field(..., ge=-125, le=-114)
 
-# =====================================================
-# 4️⃣ Métriques Prometheus
-# =====================================================
-REQUEST_COUNT = Counter("prediction_requests_total", "Nombre total de requêtes /predict")
-LAST_PREDICTION = Gauge("last_prediction_timestamp", "Horodatage de la dernière prédiction")
+# Prometheus metrics
+REQUEST_COUNT = Counter("prediction_requests_total", "Total /predict")
+LAST_PRED_TS   = Gauge("last_prediction_timestamp", "Dernière prédiction (timestamp)")
 
-# =====================================================
-# 5️⃣ Fonctions utilitaires
-# =====================================================
-def compute_model_hash(file_path: str) -> str:
-    """Retourne un hash unique du modèle pour traçabilité"""
-    with open(file_path, "rb") as f:
-        return hashlib.md5(f.read()).hexdigest()
+def _file_md5(p: str) -> str:
+    with open(p, "rb") as f: return hashlib.md5(f.read()).hexdigest()
 
-def model_info():
-    """Retourne les infos sur le modèle"""
+def _model_info():
     return {
-        "model_version": "1.0.0",
-        "model_hash": compute_model_hash(MODEL_PATH),
-        "last_updated": datetime.utcfromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat() + "Z"
+        "api_version": app.version,
+        "model_hash": _file_md5(MODEL_PATH),
+        "scaler_hash": _file_md5(SCALER_PATH),
+        "model_last_updated": datetime.utcfromtimestamp(os.path.getmtime(MODEL_PATH)).isoformat()+"Z"
     }
 
-# =====================================================
-# 6️⃣ Endpoints de service
-# =====================================================
-
 @app.get("/health")
-def health():
-    """Vérifie que l’API et le modèle fonctionnent"""
-    return {"status": "ok", "model_loaded": os.path.exists(MODEL_PATH)}
+def health(): return {"status": "ok", "model_loaded": True}
 
 @app.get("/version")
-def version():
-    """Retourne la version et les métadonnées du modèle"""
-    return model_info()
+def version(): return {"api_version": app.version}
+
+@app.get("/model_info")
+def model_info(): return _model_info()
 
 @app.get("/metrics")
 def metrics():
-    """Expose les métriques Prometheus"""
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# =====================================================
-# 7️⃣ Endpoint principal de prédiction
-# =====================================================
 @app.post("/predict")
 def predict(features: HouseFeatures):
-    """
-    Prend les caractéristiques d'une maison et renvoie le prix prédit.
-    """
     try:
-        data = np.array([[features.MedInc, features.HouseAge, features.AveRooms,
-                          features.AveBedrms, features.Population, features.AveOccup,
-                          features.Latitude, features.Longitude]])
-
-        X_scaled = scaler.transform(data)
-        prediction = model.predict(X_scaled)[0]
-
-        REQUEST_COUNT.inc()
-        LAST_PREDICTION.set_to_current_time()
-
-        return {"predicted_price": float(prediction)}
-
+        X = np.array([[features.MedInc, features.HouseAge, features.AveRooms,
+                       features.AveBedrms, features.Population, features.AveOccup,
+                       features.Latitude, features.Longitude]])
+        Xs = scaler.transform(X)
+        y  = model.predict(Xs)[0]
+        REQUEST_COUNT.inc(); LAST_PRED_TS.set_to_current_time()
+        return {"predicted_price": float(y)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-# =====================================================
-# 8️⃣ Lancement local
-# =====================================================
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("src.api:app", host="0.0.0.0", port=8000, reload=True)

@@ -1,0 +1,13 @@
+global:
+  smtp_smarthost: "smtp.gmail.com:587"
+  smtp_from: ${GOOGLE_ACCOUNT}
+  smtp_auth_username: ${GOOGLE_ACCOUNT}
+  smtp_auth_password: ${GOOGLE_PASSWORD_APP}
+
+route:
+  receiver: "mail"
+
+receivers:
+  - name: "mail"
+    email_configs:
+      - to: "tatuejordan@gmail.com"

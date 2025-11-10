@@ -16,3 +16,37 @@ pip show uvicorn
 uvicorn src.api:app --reload
 jupyter notebook  
 jupyter lab   
+
+
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":5,"HouseAge":20,"AveRooms":6,"AveBedrms":1,"Population":1000,"AveOccup":3,"Latitude":34,"Longitude":-118}'
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":12.5,"HouseAge":15,"AveRooms":7,"AveBedrms":1.2,"Population":800,"AveOccup":2.5,"Latitude":37.5,"Longitude":-122.3}'
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":3.2,"HouseAge":45,"AveRooms":5,"AveBedrms":1.1,"Population":3500,"AveOccup":3.8,"Latitude":33.8,"Longitude":-117.9}'
+
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":4.4,"HouseAge":30,"AveRooms":4.8,"AveBedrms":1.0,"Population":300,"AveOccup":2.1,"Latitude":36.2,"Longitude":-119.1}'
+
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":6.8,"HouseAge":25,"AveRooms":5.5,"AveBedrms":1.3,"Population":5500,"AveOccup":4.2,"Latitude":34.3,"Longitude":-118.4}'
+
+Invoke-WebRequest -Uri "http://127.0.0.1:8000/predict" `
+    -Method POST `
+    -Headers @{ "Content-Type" = "application/json" } `
+    -Body '{"MedInc":1.5,"HouseAge":60,"AveRooms":3.5,"AveBedrms":1.0,"Population":8000,"AveOccup":5.5,"Latitude":32.8,"Longitude":-117.1}'

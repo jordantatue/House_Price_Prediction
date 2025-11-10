@@ -48,18 +48,17 @@ jobs:
       - name: Run tests (with coverage)
         run: pytest --cov=src --cov-report=term-missing
 
-      
-      # Optionnel : échouer si la couverture < 70%
-      # - name: Enforce coverage threshold
-      #   run: |
-      #     coverage=$(pytest --cov=src --cov-report=term | awk '/TOTAL/ {print $4}' | sed 's/%//')
-      #     python - <<'PY'
-      #     import sys, os
-      #     cov = float(os.environ.get("coverage", "0"))
-      #     sys.exit(0 if cov >= 70 else 1)
-      #     PY
-      #   env:
-      #     coverage: ${{ steps.tests.outputs.coverage || '0' }}
+      - name: Install security tools
+        run: |
+          pip install pip-audit bandit
+
+      - name: pip-audit (deps vulns)
+        run: |
+          pip-audit -r requirements.txt
+
+      - name: bandit (code security)
+        run: |
+          bandit -r src -q
 
       # Optionnel : cache buildx
       - name: Set up Docker Buildx

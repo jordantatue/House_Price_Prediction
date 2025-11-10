@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "fastapi-ml"
+    static_configs:
+      - targets: ["api:8000"]
+
+rule_files:
+  - "alerts.yml"

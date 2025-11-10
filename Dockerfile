@@ -1,33 +1,24 @@
-# Image Python officielle, légère
-FROM python:3.11-slim AS base
+FROM python:3.11-slim
 
-# — Bonnes pratiques Python —
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# 1) Créer un user non-root
+RUN useradd -m appuser
 
-# — Dépendances système minimales (si besoin) —
-# (ajoute gcc, libgomp, etc. si certaines libs scientifiques le réclament)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Dossier de travail dans le conteneur
+# 2) Dossier et dépendances système minimales
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
-# 1) Copier uniquement requirements pour profiter du cache pip
+# 3) Copier requirements et installer
 COPY requirements.txt /app/requirements.txt
-
-# 2) Installer dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 3) Copier le reste du projet (code + modèles LFS déjà récupérés par la CI)
+# 4) Copier le code et les modèles
 COPY . /app
 
-# — Optionnel : vérification que les modèles sont bien là —
-# RUN ls -la /app/models || true
+# 5) Droits & passage en non-root
+RUN chown -R appuser:appuser /app
+USER appuser
 
-# Expose l’API FastAPI
+# 6) Exposer et démarrer
 EXPOSE 8000
-
-# Commande de démarrage (Uvicorn)
 CMD ["uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
